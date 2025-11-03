@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GURPS Приложение</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: 'Segoe UI', Tahoma, sans-serif; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: #333; padding: 20px; min-height: 100vh; }
+        .container { max-width: 800px; margin: 0 auto; background: white; border-radius: 15px; box-shadow: 0 10px 30px rgba(0,0,0,0.3); overflow: hidden; }
+        .header { background: linear-gradient(135deg, #2c3e50, #34495e); color: white; padding: 20px; text-align: center; }
+        .character-info { display: flex; gap: 15px; margin-bottom: 15px; flex-wrap: wrap; justify-content: center; }
+        .input-group { flex: 1; min-width: 200px; }
+        .input-group label { display: block; margin-bottom: 5px; font-weight: bold; color: #ecf0f1; }
+        .input-group input { width: 100%; padding: 10px; border: none; border-radius: 8px; font-size: 16px; background: rgba(255,255,255,0.9); }
+        .skills-section { padding: 20px; border-bottom: 2px solid #ecf0f1; }
+        .section-title { font-size: 1.4em; color: #2c3e50; margin-bottom: 15px; padding-bottom: 8px; border-bottom: 2px solid #3498db; display: flex; align-items: center; gap: 10px; }
+        .skill-row { display: flex; align-items: center; padding: 12px 0; border-bottom: 1px solid #ecf0f1; }
+        .skill-name { flex: 2; font-weight: 500; display: flex; align-items: center; gap: 8px; }
+        .skill-controls { flex: 1; display: flex; align-items: center; justify-content: flex-end; gap: 10px; }
+        .skill-value { font-size: 1.2em; font-weight: bold; color: #2c3e50; min-width: 30px; text-align: center; }
+        .btn { padding: 8px 12px; border: none; border-radius: 6px; cursor: pointer; font-size: 16px; font-weight: bold; transition: all 0.3s; }
+        .btn-plus { background: #27ae60; color: white; }
+        .btn-minus { background: #e74c3c; color: white; }
+        .btn-roll { background: #3498db; color: white; padding: 8px 15px; margin-left: 10px; }
+        .btn:disabled { background: #bdc3c7; cursor: not-allowed; }
+        .result-popup { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); display: flex; justify-content: center; align-items: center; z-index: 1000; }
+        .result-content { background: white; padding: 30px; border-radius: 15px; text-align: center; max-width: 90%; width: 400px; }
+        .dice-rolls { display: flex; justify-content: center; gap: 15px; margin: 15px 0; }
+        .dice { width: 50px; height: 50px; background: #3498db; border-radius: 8px; display: flex; justify-content: center; align-items: center; font-size: 1.5em; font-weight: bold; color: white; }
+        .success { color: #27ae60; font-weight: bold; }
+        .failure { color: #e74c3c; font-weight: bold; }
+        .critical-success { color: #f39c12; font-weight: bold; }
+        .critical-failure { color: #c0392b; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🎲 GURPS Приложение</h1>
+            <div class="character-info">
+                <div class="input-group">
+                    <label for="characterName">Имя персонажа:</label>
+                    <input type="text" id="characterName" placeholder="Введите имя">
+                </div>
+                <div class="input-group">
+                    <label for="freePoints">Свободные очки:</label>
+                    <input type="number" id="freePoints" value="50" min="0">
+                </div>
+            </div>
+        </div>
+
+        <div id="skillsContainer"></div>
+        <div class="free-points-warning" id="pointsWarning" style="display: none; color: #e74c3c; font-weight: bold; text-align: center; margin: 10px; padding: 10px; background: #ffeaa7; border-radius: 5px;">
+            ⚠️ Свободные очки закончились!
+        </div>
+    </div>
+
+    <script>
+        const skillsStructure = {
+            "⚔️ БОЕВЫЕ НАВЫКИ": ["Тяжёлая броня", "Лёгкая броня", "Двуручное оружие", "Одноручное оружие", "Стрельба", "Блокирование", "Древковое", "Рукопашный бой", "Метание"],
+            "🎭 ОБЩИЕ НАВЫКИ": ["Скрытность", "Красноречие", "Ловкость", "Выносливость", "Взлом", "Восприятие", "Удача", "Карманные кражи"],
+            "⚗️ РЕМЕСЛА": ["Алхимия", "Кузнечное дело", "Зачарование", "Ремесло"],
+            "🔮 МАГИЯ": ["Магия воды", "Магия земли", "Магия воздуха", "Магия крови", "Магия огня", "Магия металла", "Магия природы", "Магия света", "Магия тьмы", "Магия инферно", "Магия хаоса", "Магия разума", "Магия Жизни", "Магия смерти", "Магия пустоты", "Магия Энергии"]
+        };
+
+        document.addEventListener('DOMContentLoaded', function() {
+            loadCharacterData();
+            renderSkills();
+            updateUI();
+        });
+
+        function renderSkills() {
+            const container = document.getElementById('skillsContainer');
+            container.innerHTML = '';
+
+            for (const [groupName, skills] of Object.entries(skillsStructure)) {
+                const section = document.createElement('div');
+                section.className = 'skills-section';
+                
+                const title = document.createElement('div');
+                title.className = 'section-title';
+                title.innerHTML = groupName;
+                section.appendChild(title);
+
+                skills.forEach(skill => {
+                    const skillRow = document.createElement('div');
+                    skillRow.className = 'skill-row';
+                    skillRow.innerHTML = `
+                        <div class="skill-name"><span>🎯</span><span>${skill}</span></div>
+                        <div class="skill-controls">
+                            <button class="btn btn-minus" onclick="decreaseSkill('${skill}')" disabled>-</button>
+                            <span class="skill-value" id="skill-${skill}">5</span>
+                            <button class="btn btn-plus" onclick="increaseSkill('${skill}')">+</button>
+                            <button class="btn btn-roll" onclick="rollSkill('${skill}')">Бросок</button>
+                        </div>
+                    `;
+                    section.appendChild(skillRow);
+                });
+                container.appendChild(section);
+            }
+        }
+
+        function increaseSkill(skillName) {
+            const freePoints = getFreePoints();
+            if (freePoints > 0) {
+                const skillValue = getSkillValue(skillName);
+                setSkillValue(skillName, skillValue + 1);
+                setFreePoints(freePoints - 1);
+                updateUI();
+                saveCharacterData();
+            }
+        }
+
+        function decreaseSkill(skillName) {
+            const skillValue = getSkillValue(skillName);
+            if (skillValue > 5) {
+                const freePoints = getFreePoints();
+                setSkillValue(skillName, skillValue - 1);
+                setFreePoints(freePoints + 1);
+                updateUI();
+                saveCharacterData();
+            }
+        }
+
+        function rollSkill(skillName) {
+            const skillValue = getSkillValue(skillName);
+            const roll1 = Math.floor(Math.random() * 6) + 1;
+            const roll2 = Math.floor(Math.random() * 6) + 1;
+            const roll3 = Math.floor(Math.random() * 6) + 1;
+            const totalRoll = roll1 + roll2 + roll3;
+
+            let resultType, resultText, resultClass;
+            if (totalRoll === 3 || totalRoll === 4) {
+                resultText = "💫 КРИТИЧЕСКИЙ УСПЕХ!";
+                resultClass = "critical-success";
+            } else if (totalRoll === 17 || totalRoll === 18) {
+                resultText = "💥 КРИТТИЧЕСКИЙ ПРОВАЛ!";
+                resultClass = "critical-failure";
+            } else if (totalRoll <= skillValue) {
+                resultText = "✅ УСПЕХ!";
+                resultClass = "success";
+            } else {
+                resultText = "❌ НЕУДАЧА!";
+                resultClass = "failure";
+            }
+
+            showRollResult(skillName, skillValue, [roll1, roll2, roll3], totalRoll, resultText, resultClass);
+        }
+
+        function showRollResult(skillName, skillValue, dice, total, resultText, resultClass) {
+            const popup = document.createElement('div');
+            popup.className = 'result-popup';
+            popup.innerHTML = `
+                <div class="result-content">
+                    <h2>Бросок на "${skillName}" (${skillValue})</h2>
+                    <div class="dice-rolls">
+                        <div class="dice">${dice[0]}</div>
+                        <div class="dice">${dice[1]}</div>
+                        <div class="dice">${dice[2]}</div>
+                    </div>
+                    <div style="font-size: 1.5em; margin: 15px 0;">${dice.join(' + ')} = ${total}</div>
+                    <div class="${resultClass}">${resultText}</div>
+                    <button class="btn close-btn" onclick="this.closest('.result-popup').remove()" style="background: #34495e; color: white; padding: 10px 25px; margin-top: 15px;">Закрыть</button>
+                </div>
+            `;
+            document.body.appendChild(popup);
+        }
+
+        function updateUI() {
+            const freePoints = getFreePoints();
+            const warning = document.getElementById('pointsWarning');
+            warning.style.display = freePoints === 0 ? 'block' : 'none';
+            
+            document.querySelectorAll('.skill-row').forEach(row => {
+                const skillName = row.querySelector('.skill-name span:nth-child(2)').textContent;
+                const skillValue = getSkillValue(skillName);
+                const minusBtn = row.querySelector('.btn-minus');
+                const plusBtn = row.querySelector('.btn-plus');
+                
+                row.querySelector('.skill-value').textContent = skillValue;
+                minusBtn.disabled = skillValue <= 5;
+                plusBtn.disabled = freePoints <= 0;
+            });
+        }
+
+        function getFreePoints() { return parseInt(document.getElementById('freePoints').value) || 0; }
+        function setFreePoints(value) { document.getElementById('freePoints').value = value; }
+        function getSkillValue(skillName) { return parseInt(localStorage.getItem(`skill_${skillName}`)) || 5; }
+        function setSkillValue(skillName, value) { localStorage.setItem(`skill_${skillName}`, value); }
+
+        function saveCharacterData() {
+            localStorage.setItem('characterName', document.getElementById('characterName').value);
+            localStorage.setItem('freePoints', getFreePoints());
+        }
+
+        function loadCharacterData() {
+            document.getElementById('characterName').value = localStorage.getItem('characterName') || '';
+            document.getElementById('freePoints').value = localStorage.getItem('freePoints') || '50';
+        }
+
+        document.getElementById('characterName').addEventListener('input', saveCharacterData);
+        document.getElementById('freePoints').addEventListener('input', function() {
+            saveCharacterData();
+            updateUI();
+        });
+    </script>
+</body>
+</html>
